@@ -2,7 +2,23 @@
 
 A lightweight, modern utility to automatically organize your Steam library into quality collections based on real user reviews and an adaptive Bayesian confidence filter.
 
-Designed as a modern alternative to legacy tools like Depressurizer, **SteamSeparator** writes directly to Steam's native collection format (`cloud-storage-namespace-1.json`).
+**SteamSeparator** writes directly to Steam's native collection format (`cloud-storage-namespace-1.json`) to create clean, reliable rating categories.
+
+---
+
+## ⚠️ Important Context & Disclaimer
+
+Before you dive in, there are three important things you should know:
+
+1. **Vibecoded with AI**:  
+   I vibecoded this entire application using an AI assistant (Google DeepMind's Antigravity). Since I didn't write the underlying code line-by-line myself, I **cannot take personal responsibility** for bugs, edge cases, or unforeseen behavior. Use it at your own discretion — though the tool does create automatic, timestamped backups of your collection files before touching anything!
+
+2. **Not a Depressurizer Replacement (Not Even Close)**:  
+   Legacy tools like *Depressurizer* were Swiss Army knives packed with dozens of features: organizing by tags, genres, completion times (HLTB), release years, and a million other parameters.  
+   **SteamSeparator is not that.** It does exactly **one thing and one thing only**: it groups your library into quality collections based solely on **Steam user ratings backed by a Bayesian confidence filter**. That is the only feature I personally needed, and that is all this app does.
+
+3. **Feature Requests & Maintenance**:  
+   You are very welcome to open issues or share ideas! However, please understand that I cannot guarantee whether or when a request can be implemented, as I am dependent on Antigravity to build, debug, and maintain this codebase. PRs from fellow developers are, of course, always welcome!
 
 ---
 
