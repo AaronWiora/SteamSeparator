@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases & local caches
+*.db
+*.db-wal
+*.db-shm
+ratings.db
+ratings.db-wal
+ratings.db-shm
+test_ratings.db
+app_names_cache.json
+
+# Testing & environments
+.pytest_cache/
+.venv/
+venv/
+env/
+ENV/
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+*.bak
+*.log
