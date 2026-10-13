@@ -2,7 +2,8 @@
 Bayesian Confidence Filter and Rating Categorization Logic.
 """
 from typing import Dict, Any, Optional, Set
-from .config import DEFAULT_C, DEFAULT_M, TIERS
+from .config import DEFAULT_C, DEFAULT_M, TIERS, POSITIVE_TIER_MULTIPLIERS, BASELINE_TIER_REVIEWS
+
 
 
 def calculate_bayesian_score(
@@ -101,7 +102,7 @@ def evaluate_game(
     b_score = calculate_bayesian_score(positive, total, c=c, m=m)
     base_tier = get_base_tier(raw_percent)
 
-    # If the user hasn't selected this tier's collection to be created, mark unassigned
+    # 1. If the user hasn't selected this tier's collection to be created, mark unassigned
     if active_tiers is not None and base_tier not in active_tiers:
         return {
             "raw_percent": round(raw_percent * 100, 1),
@@ -113,13 +114,16 @@ def evaluate_game(
             "status_label_en": "Not selected",
         }
 
-    tier_info = TIERS.get(base_tier, {})
-    required_b_score = tier_info.get("bayesian_min", 0.0)
+    # 2. Base tier is in active collections! Quality Gate check:
+    # - Positive tiers scale with the confidence slider C to filter out niche echo chambers.
+    # - Neutral / Negative tiers require standard Steam baselines (50 reviews, 500 for Overwhelmingly Negative)
+    #   because low ratings do not represent quality that needs proving.
+    if base_tier in POSITIVE_TIER_MULTIPLIERS:
+        required_reviews = POSITIVE_TIER_MULTIPLIERS[base_tier] * c
+    else:
+        required_reviews = BASELINE_TIER_REVIEWS.get(base_tier, 50)
 
-    # Check confidence threshold for selected tier
-    qualifies = b_score >= required_b_score
-
-    if not qualifies:
+    if total < required_reviews:
         return {
             "raw_percent": round(raw_percent * 100, 1),
             "bayesian_score": round(b_score * 100, 1),

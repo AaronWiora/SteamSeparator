@@ -48,6 +48,7 @@ def is_steam_running() -> bool:
             ["tasklist", "/FI", "IMAGENAME eq steam.exe", "/NH"],
             text=True,
             stderr=subprocess.DEVNULL,
+            timeout=2.0,
         )
         return "steam.exe" in output.lower()
     except Exception:

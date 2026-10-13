@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from .config import DEFAULT_C, DEFAULT_M, TIERS, WORKSPACE_ROOT
+from .config import DEFAULT_C, DEFAULT_M, TIERS, FILTER_LEVELS, WORKSPACE_ROOT
 from .bayesian import evaluate_game
 from .rating_service import RatingDatabase, RatingFetcher
 from .app_catalog import get_cached_name
@@ -80,6 +80,7 @@ async def get_status():
         "default_c": DEFAULT_C,
         "default_m": DEFAULT_M,
         "tiers": TIERS,
+        "filter_levels": FILTER_LEVELS,
     }
 
 
@@ -318,10 +319,28 @@ async def post_restore(req: RestoreRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.middleware("http")
+async def add_no_cache_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static") or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 # Static frontend mounting
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     @app.get("/")
     async def serve_index():
-        return FileResponse(static_dir / "index.html")
+        return FileResponse(
+            static_dir / "index.html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+

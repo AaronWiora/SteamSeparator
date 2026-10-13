@@ -1,11 +1,26 @@
 // SteamSeparator - Lean & Bilingual Frontend
 let currentLang = localStorage.getItem('lang') || 'en';
-let currentC = 350.0;
+let currentLevel = 5;
+let currentC = 700.0;
 let currentStatus = null;
 let currentPreview = null;
 let scanPollInterval = null;
 let debounceTimer = null;
 let activeFilter = 'assigned'; // Default: only assigned games!
+
+// 10 Stepped Filter Levels for Unified Quality Gate
+const FILTER_LEVELS = [
+  { level: 1, c: 150.0, opHint: "180", vpHint: "530", en: "Very Lenient", de: "Sehr locker" },
+  { level: 2, c: 250.0, opHint: "300", vpHint: "890", en: "Lenient", de: "Locker" },
+  { level: 3, c: 350.0, opHint: "440", vpHint: "1.2k", en: "Light", de: "Leicht" },
+  { level: 4, c: 500.0, opHint: "625", vpHint: "1.8k", en: "Moderate", de: "Moderat" },
+  { level: 5, c: 700.0, opHint: "875", vpHint: "2.5k", en: "Balanced", de: "Ausgewogen" },
+  { level: 6, c: 950.0, opHint: "1.2k", vpHint: "3.4k", en: "Firm", de: "Bestimmt" },
+  { level: 7, c: 1300.0, opHint: "1.6k", vpHint: "4.6k", en: "Strict", de: "Streng" },
+  { level: 8, c: 1800.0, opHint: "2.2k", vpHint: "6.4k", en: "Very Strict", de: "Sehr streng" },
+  { level: 9, c: 2500.0, opHint: "3.1k", vpHint: "8.9k", en: "High Confidence", de: "Hohe Relevanz" },
+  { level: 10, c: 3500.0, opHint: "4.4k", vpHint: "12.5k", en: "Bestsellers Only", de: "Nur Bestseller" },
+];
 
 // Translations
 const i18n = {
@@ -17,13 +32,9 @@ const i18n = {
     steamStopped: "✅ Steam beendet (bereit zum Speichern)",
     tuningTitle: "Feinjustierung",
     confidenceLabel: "Review-Filter",
-    confidencePopover: "Gewichtet die Review-Anzahl: Verhindert Top-Einstufungen bei geringer Stimmenanzahl.",
-    levelLow: "Niedrig",
-    levelMed: "Mittel",
-    levelHigh: "Hoch",
-    levelDescLow: "Tolerant: Benötigt ca. 800 Reviews für Top-Wertungen",
-    levelDescMed: "Ausgewogen: Benötigt ca. 1.900 Reviews für Top-Wertungen (Standard)",
-    levelDescHigh: "Streng: Benötigt ca. 3.800 Reviews für Top-Wertungen",
+    confidencePopover: "Sortiert Nischen-Spiele mit zu wenigen Reviews aus. Spiele mit 95%+ benötigen weniger Reviews, während mittelmäßig bewertete Spiele (80-85%) deutlich mehr Stimmen brauchen.",
+    noTiersSelected: "Mindestens eine Collection auswählen",
+    thresholdMinSuffix: "+ Reviews",
     grpLowConf: "Zu wenige Reviews",
     grpUnavailable: "Nicht im Land verfügbar",
     grpDelisted: "Delistet / Nicht mehr im Shop",
@@ -75,13 +86,9 @@ const i18n = {
     steamStopped: "✅ Steam is closed (ready to apply)",
     tuningTitle: "Fine Tuning",
     confidenceLabel: "Review Filter",
-    confidencePopover: "Weights review count: Prevents top rankings with low vote counts.",
-    levelLow: "Low",
-    levelMed: "Medium",
-    levelHigh: "High",
-    levelDescLow: "Tolerant: Requires ~800 reviews for top ratings",
-    levelDescMed: "Balanced: Requires ~1,900 reviews for top ratings (Default)",
-    levelDescHigh: "Strict: Requires ~3,800 reviews for top ratings",
+    confidencePopover: "Filters out niche games with too few reviews. Masterpieces (95%+) need fewer reviews to qualify, while mid-rated games (80-85%) require significantly more votes.",
+    noTiersSelected: "Select at least one collection",
+    thresholdMinSuffix: "+ reviews",
     grpLowConf: "Few reviews",
     grpUnavailable: "Not available in country",
     grpDelisted: "Delisted / No longer in store",
@@ -147,10 +154,12 @@ const statsGrid = document.getElementById('stats-grid');
 const btnLangDe = document.getElementById('btn-lang-de');
 const btnLangEn = document.getElementById('btn-lang-en');
 
-// Level Buttons
-const btnLevelLow = document.getElementById('btn-level-low');
-const btnLevelMed = document.getElementById('btn-level-med');
-const btnLevelHigh = document.getElementById('btn-level-high');
+// Stepped Slider & Dynamic Threshold Rows Elements
+const filterLevelSlider = document.getElementById('filter-level-slider');
+const filterLevelBadge = document.getElementById('filter-level-badge');
+const thresholdCard = document.getElementById('threshold-card') || document.getElementById('threshold-chips-container');
+
+
 
 function t(key) {
   return (i18n[currentLang] && i18n[currentLang][key]) || key;
@@ -207,34 +216,20 @@ function applyLanguage() {
     thRaw.title = t('tooltipRaw');
   }
 
-  const thScore = document.getElementById('th-score');
-  if (thScore) {
-    thScore.textContent = t('thScore');
-    thScore.title = t('tooltipScore');
-  }
-
   const thStatus = document.getElementById('th-status');
   if (thStatus) thStatus.textContent = t('thStatus');
 
-  if (btnLevelLow) {
-    btnLevelLow.textContent = t('levelLow');
-    btnLevelLow.title = t('levelDescLow');
-  }
-  if (btnLevelMed) {
-    btnLevelMed.textContent = t('levelMed');
-    btnLevelMed.title = t('levelDescMed');
-  }
-  if (btnLevelHigh) {
-    btnLevelHigh.textContent = t('levelHigh');
-    btnLevelHigh.title = t('levelDescHigh');
-  }
+  // Update slider badge and hint with active language
+  updateLevelDisplay(currentLevel);
 
-  if (currentLang === 'de') {
-    btnLangDe.classList.add('active');
-    btnLangEn.classList.remove('active');
-  } else {
-    btnLangEn.classList.add('active');
-    btnLangDe.classList.remove('active');
+  if (btnLangDe && btnLangEn) {
+    if (currentLang === 'de') {
+      btnLangDe.classList.add('active');
+      btnLangEn.classList.remove('active');
+    } else {
+      btnLangEn.classList.add('active');
+      btnLangDe.classList.remove('active');
+    }
   }
 
   if (currentStatus) renderStatus();
@@ -245,27 +240,135 @@ function applyLanguage() {
 }
 
 // Language switch listeners
-btnLangDe.addEventListener('click', () => {
-  currentLang = 'de';
-  localStorage.setItem('lang', 'de');
-  applyLanguage();
-});
+if (btnLangDe) {
+  btnLangDe.addEventListener('click', () => {
+    currentLang = 'de';
+    localStorage.setItem('lang', 'de');
+    applyLanguage();
+  });
+}
 
-btnLangEn.addEventListener('click', () => {
-  currentLang = 'en';
-  localStorage.setItem('lang', 'en');
-  applyLanguage();
-});
+if (btnLangEn) {
+  btnLangEn.addEventListener('click', () => {
+    currentLang = 'en';
+    localStorage.setItem('lang', 'en');
+    applyLanguage();
+  });
+}
 
-// Level selector listeners
-[btnLevelLow, btnLevelMed, btnLevelHigh].forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    [btnLevelLow, btnLevelMed, btnLevelHigh].forEach(b => b.classList.remove('active'));
+// Graceful fallback for legacy 3-button selectors if cached by any client
+const legacyButtons = [
+  document.getElementById('btn-level-low'),
+  document.getElementById('btn-level-med'),
+  document.getElementById('btn-level-high')
+].filter(Boolean);
+
+legacyButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    legacyButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    currentC = parseFloat(btn.getAttribute('data-c'));
+    currentC = parseFloat(btn.getAttribute('data-c') || '700');
     fetchPreview();
   });
 });
+
+// Level Display & Slider logic
+let previewDebounceTimer = null;
+
+function formatReviewCount(num) {
+  if (num >= 10000) {
+    return `${(num / 1000).toFixed(1).replace('.0', '')}k`;
+  } else if (num >= 1000) {
+    return `${(num / 1000).toFixed(1).replace('.0', '')}k`;
+  }
+  return String(Math.round(num));
+}
+
+function getTierReviewThreshold(tierName, cVal) {
+  switch (tierName) {
+    case 'Overwhelmingly Positive':
+      return formatReviewCount(Math.round(cVal * 1.25));
+    case 'Very Positive':
+      return formatReviewCount(Math.round(cVal * 3.57));
+    case 'Mostly Positive':
+      return formatReviewCount(Math.round(cVal * 5.7));
+    case 'Mixed':
+      return '50';
+    case 'Mostly Negative':
+      return '50';
+    case 'Overwhelmingly Negative':
+      return '500';
+    default:
+      return '50';
+  }
+}
+
+function renderThresholdChips() {
+  const container = thresholdCard || document.getElementById('threshold-card') || document.getElementById('threshold-chips-container');
+  if (!container) return;
+  const tiers = (currentStatus && currentStatus.tiers) || {};
+  const selectedTiers = getSelectedTiers();
+
+  container.innerHTML = '';
+
+  if (selectedTiers.length === 0) {
+    const emptySpan = document.createElement('div');
+    emptySpan.className = 'threshold-empty-hint';
+    emptySpan.textContent = t('noTiersSelected');
+    container.appendChild(emptySpan);
+    return;
+  }
+
+  for (const [tierName, info] of Object.entries(tiers)) {
+    if (!selectedTiers.includes(tierName)) continue;
+
+    const countStr = getTierReviewThreshold(tierName, currentC);
+    const isBaseline = ['Mixed', 'Mostly Negative', 'Overwhelmingly Negative'].includes(tierName);
+    const prefix = isBaseline ? '' : '~';
+    const row = document.createElement('div');
+    row.className = 'threshold-row';
+    row.innerHTML = `
+      <div class="threshold-row-left">
+        <span class="threshold-row-dot" style="background-color: ${info.badge_color || '#66c0f4'};"></span>
+        <span class="threshold-row-title">${escapeHtml(tierName)}</span>
+      </div>
+      <div class="threshold-pill">
+        <span class="threshold-pill-num">${prefix}${countStr}+</span>
+        <span class="threshold-pill-unit">${currentLang === 'de' ? 'Reviews' : 'reviews'}</span>
+      </div>
+    `;
+    container.appendChild(row);
+  }
+}
+
+function updateLevelDisplay(levelNum) {
+  currentLevel = Math.max(1, Math.min(10, levelNum || 5));
+  const lvlData = FILTER_LEVELS[currentLevel - 1];
+  currentC = lvlData.c;
+
+  if (filterLevelBadge) {
+    const label = currentLang === 'de' ? lvlData.de : lvlData.en;
+    filterLevelBadge.textContent = `Level ${currentLevel} · ${label}`;
+  }
+
+  renderThresholdChips();
+
+  if (filterLevelSlider && parseInt(filterLevelSlider.value, 10) !== currentLevel) {
+    filterLevelSlider.value = currentLevel;
+  }
+}
+
+if (filterLevelSlider) {
+  filterLevelSlider.addEventListener('input', (e) => {
+    const lvl = parseInt(e.target.value, 10);
+    updateLevelDisplay(lvl);
+
+    if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+    previewDebounceTimer = setTimeout(() => {
+      fetchPreview();
+    }, 150);
+  });
+}
 
 // Info Popover listeners
 const btnConfInfo = document.getElementById('btn-confidence-info');
@@ -303,6 +406,9 @@ async function init() {
   applyLanguage();
   try {
     const res = await fetch('/api/status');
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
     currentStatus = await res.json();
     renderStatus();
     renderTiersList();
@@ -310,36 +416,53 @@ async function init() {
     checkScanProgress();
   } catch (err) {
     showToast('Error loading status: ' + err.message, 'error');
+    if (gamesTableBody) {
+      const isDe = currentLang === 'de';
+      gamesTableBody.innerHTML = `
+        <tr>
+          <td colspan="4" class="table-loading">
+            <div style="margin-bottom: 12px; color: #ef5350;">⚠️ ${isDe ? 'Fehler beim Verbinden mit dem Server' : 'Error connecting to server'}: ${escapeHtml(err.message)}</div>
+            <button onclick="init()" class="btn btn-secondary" style="margin: 0 auto; display: inline-flex;">🔄 ${isDe ? 'Erneut versuchen' : 'Retry'}</button>
+          </td>
+        </tr>
+      `;
+    }
   }
 }
 
 function renderStatus() {
-  if (currentStatus.is_steam_running) {
-    steamStatusBadge.className = 'status-badge running';
-    steamStatusText.textContent = t('steamRunning');
-  } else {
-    steamStatusBadge.className = 'status-badge stopped';
-    steamStatusText.textContent = t('steamStopped');
+  if (!currentStatus) return;
+
+  if (steamStatusBadge && steamStatusText) {
+    if (currentStatus.is_steam_running) {
+      steamStatusBadge.className = 'status-badge running';
+      steamStatusText.textContent = t('steamRunning');
+    } else {
+      steamStatusBadge.className = 'status-badge stopped';
+      steamStatusText.textContent = t('steamStopped');
+    }
   }
 
-  accountSelect.innerHTML = '';
-  if (currentStatus.users && currentStatus.users.length > 0) {
-    currentStatus.users.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value = u.account_id;
-      opt.textContent = `${u.persona_name} (${u.account_id})`;
-      if (u.account_id === currentStatus.selected_account_id) {
-        opt.selected = true;
-      }
-      accountSelect.appendChild(opt);
-    });
-  } else {
-    accountSelect.innerHTML = '<option value="">No account found</option>';
-  }
+  if (accountSelect) {
+    accountSelect.innerHTML = '';
+    if (currentStatus.users && currentStatus.users.length > 0) {
+      currentStatus.users.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.account_id;
+        opt.textContent = `${u.persona_name} (${u.account_id})`;
+        if (u.account_id === currentStatus.selected_account_id) {
+          opt.selected = true;
+        }
+        accountSelect.appendChild(opt);
+      });
+    } else {
+      accountSelect.innerHTML = '<option value="">No account found</option>';
+    }
 
-  accountSelect.addEventListener('change', () => {
-    fetchPreview();
-  });
+    accountSelect.onchange = () => {
+      fetchPreview();
+    };
+  }
 }
 
 function renderTiersList() {
@@ -354,7 +477,10 @@ function renderTiersList() {
     checkbox.type = 'checkbox';
     checkbox.value = tierName;
     checkbox.checked = info.default_active || false;
-    checkbox.addEventListener('change', () => fetchPreview());
+    checkbox.addEventListener('change', () => {
+      renderThresholdChips();
+      fetchPreview();
+    });
 
     const span = document.createElement('span');
     span.className = 'tier-item-label';
@@ -364,6 +490,7 @@ function renderTiersList() {
     label.appendChild(span);
     tiersCheckboxList.appendChild(label);
   }
+  renderThresholdChips();
 }
 
 function getSelectedTiers() {
@@ -457,8 +584,21 @@ async function checkScanProgress() {
 }
 
 async function fetchPreview() {
-  const accountId = accountSelect.value;
-  if (!accountId) return;
+  const accountId = accountSelect ? accountSelect.value : null;
+  if (!accountId) {
+    if (gamesTableBody) {
+      const isDe = currentLang === 'de';
+      gamesTableBody.innerHTML = `
+        <tr>
+          <td colspan="4" class="table-loading">
+            <div style="margin-bottom: 8px;">${isDe ? 'Kein Steam-Account gefunden.' : 'No Steam account detected.'}</div>
+            <div style="font-size: 13px; color: var(--steam-text-muted);">${isDe ? 'Bitte stelle sicher, dass Steam auf diesem PC installiert ist.' : 'Please ensure Steam is installed and you are logged in on this PC.'}</div>
+          </td>
+        </tr>
+      `;
+    }
+    return;
+  }
 
   const payload = {
     account_id: accountId,
@@ -473,20 +613,52 @@ async function fetchPreview() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const msg = errData.detail || (currentLang === 'de' ? 'Fehler beim Laden der Vorschau' : 'Error loading library preview');
+      showToast(msg, 'error');
+      if (gamesTableBody) {
+        gamesTableBody.innerHTML = `
+          <tr>
+            <td colspan="4" class="table-loading">
+              <div style="margin-bottom: 12px; color: #ef5350;">⚠️ ${escapeHtml(msg)}</div>
+              <button onclick="fetchPreview()" class="btn btn-secondary" style="margin: 0 auto; display: inline-flex;">🔄 ${currentLang === 'de' ? 'Erneut versuchen' : 'Retry'}</button>
+            </td>
+          </tr>
+        `;
+      }
+      return;
+    }
+
     currentPreview = await res.json();
 
-    if (currentPreview.is_steam_running) {
-      steamStatusBadge.className = 'status-badge running';
-      steamStatusText.textContent = t('steamRunning');
-    } else {
-      steamStatusBadge.className = 'status-badge stopped';
-      steamStatusText.textContent = t('steamStopped');
+    if (steamStatusBadge && steamStatusText) {
+      if (currentPreview.is_steam_running) {
+        steamStatusBadge.className = 'status-badge running';
+        steamStatusText.textContent = t('steamRunning');
+      } else {
+        steamStatusBadge.className = 'status-badge stopped';
+        steamStatusText.textContent = t('steamStopped');
+      }
     }
 
     renderStats();
     renderTable();
   } catch (err) {
     console.error('Preview error:', err);
+    const msg = (currentLang === 'de' ? 'Verbindungsfehler: ' : 'Connection error: ') + err.message;
+    showToast(msg, 'error');
+    if (gamesTableBody) {
+      gamesTableBody.innerHTML = `
+        <tr>
+          <td colspan="4" class="table-loading">
+            <div style="margin-bottom: 12px; color: #ef5350;">⚠️ ${escapeHtml(msg)}</div>
+            <button onclick="fetchPreview()" class="btn btn-secondary" style="margin: 0 auto; display: inline-flex;">🔄 ${currentLang === 'de' ? 'Erneut versuchen' : 'Retry'}</button>
+          </td>
+        </tr>
+      `;
+    }
   }
 }
 
@@ -578,8 +750,6 @@ function renderGameRow(g) {
     ? `<span class="pct-sub">${g.total_positive.toLocaleString()} / ${g.total_reviews.toLocaleString()}</span>`
     : '';
 
-  const bScore = g.total_reviews > 0 ? `${g.bayesian_score}%` : '-';
-
   return `
     <tr>
       <td>
@@ -609,7 +779,6 @@ function renderGameRow(g) {
           ${reviewsSubline}
         </div>
       </td>
-      <td style="text-align: right; color: var(--steam-blue);" class="num-cell">${bScore}</td>
       <td>
         <span class="score-badge ${statusBadgeClass}">${escapeHtml(label)}</span>
       </td>
@@ -688,8 +857,18 @@ async function refreshGroupGames(groupKey, event) {
 }
 
 function renderTable() {
+  if (!gamesTableBody) return;
+
   if (!currentPreview || !currentPreview.games) {
-    gamesTableBody.innerHTML = `<tr><td colspan="5" class="table-loading">${t('loading')}</td></tr>`;
+    const isDe = currentLang === 'de';
+    gamesTableBody.innerHTML = `
+      <tr>
+        <td colspan="4" class="table-loading">
+          <div style="margin-bottom: 12px;">${t('loading')}</div>
+          <button onclick="fetchPreview()" class="btn btn-secondary" style="margin: 0 auto; display: inline-flex;">🔄 ${isDe ? 'Neu laden' : 'Reload'}</button>
+        </td>
+      </tr>
+    `;
     return;
   }
 
@@ -707,7 +886,7 @@ function renderTable() {
   });
 
   if (allFilteredGames.length === 0) {
-    gamesTableBody.innerHTML = `<tr><td colspan="5" class="table-loading">${t('noGames')}</td></tr>`;
+    gamesTableBody.innerHTML = `<tr><td colspan="4" class="table-loading">${t('noGames')}</td></tr>`;
     return;
   }
 
@@ -724,7 +903,7 @@ function renderTable() {
         const dotColor = tiers[tier]?.badge_color || '#66c0f4';
         rowsHtml += `
           <tr class="group-header-row">
-            <td colspan="5">
+            <td colspan="4">
               <div class="group-header-title">
                 <span class="group-header-title-text">
                   <span class="tier-color-dot" style="background-color: ${dotColor};"></span>
@@ -774,7 +953,7 @@ function renderTable() {
       if (secGames.length > 0) {
         rowsHtml += `
           <tr class="group-header-row group-header-${sec.key}">
-            <td colspan="5">
+            <td colspan="4">
               <div class="group-header-title">
                 <span class="group-header-title-text">
                   <span class="tier-color-dot" style="background-color: ${sec.color};"></span>
@@ -801,7 +980,8 @@ function renderTable() {
   gamesTableBody.innerHTML = rowsHtml;
 }
 
-btnSave.addEventListener('click', async () => {
+if (btnSave) {
+  btnSave.addEventListener('click', async () => {
   const statusRes = await fetch('/api/status');
   const freshStatus = await statusRes.json();
 
@@ -851,6 +1031,7 @@ btnSave.addEventListener('click', async () => {
     document.getElementById('i18n-btn-save').textContent = t('btnSave');
   }
 });
+}
 
 function showToast(msg, type = 'success') {
   toastEl.textContent = msg;

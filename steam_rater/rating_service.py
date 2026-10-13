@@ -234,45 +234,53 @@ class RatingFetcher:
                     if m_props:
                         props = json.loads(html.unescape(m_props.group(1)))
                         store_name = props.get("appname")
+                        summary_disp = (
+                            props.get("summary_options", {}).get("summaryGlobalNoOutliers")
+                            or props.get("summary_options", {}).get("summaryGlobal")
+                            or props.get("summary_options", {}).get("summaryDisplayed")
+                            or {}
+                        )
                         filt_opts = props.get("filter_options", {})
                         n_steam = filt_opts.get("nReviewsSteamPurchase", 0)
                         raw_pos = filt_opts.get("nReviewsPositive", 0)
                         raw_neg = filt_opts.get("nReviewsNegative", 0)
                         raw_tot_all = raw_pos + raw_neg
 
-                        has_purchase = "btn_add_to_cart" in res_store.text or "free_btn" in res_store.text
-                        is_free_bool = any(k in text_lower for k in ["free to play", "play for free", "kostenlos spielen", "kostenlos"])
-                        is_free_val = 1 if (is_free_bool or (n_steam == 0 and raw_tot_all > 0)) else 0
-
-                        # Review counts:
-                        # For games with purchase disabled (e.g. remasters replaced originals), F2P, 0 steam checkout, or high key ratios:
-                        is_purchase_disabled = not has_purchase and not is_free_bool and any(k in text_lower for k in ["no longer available", "nicht mehr im steam-shop", "nicht mehr zur verfügung"])
-                        if is_purchase_disabled or is_free_val == 1 or n_steam == 0 or (n_steam > 0 and raw_tot_all > 1.5 * n_steam and raw_tot_all - n_steam > 1000):
+                        # 1a. Canonical reviews displayed on the Steam Store header
+                        if summary_disp.get("nReviews", 0) > 0:
+                            total = summary_disp["nReviews"]
+                            pos = summary_disp.get("nReviewsPositive", 0)
+                            neg = max(0, total - pos)
+                            score_id = summary_disp.get("eReviewScore", 0)
+                            desc = SCORE_MAP.get(score_id, "Unrated")
+                            fetched_ok = True
+                        elif n_steam > 0:
+                            total = n_steam
+                            ratio = (raw_pos / raw_tot_all) if raw_tot_all > 0 else 0.5
+                            pos = int(round(total * ratio))
+                            neg = max(0, total - pos)
+                            score_id = summary_disp.get("eReviewScore", 0)
+                            desc = SCORE_MAP.get(score_id, "Unrated")
+                            fetched_ok = True
+                        elif raw_tot_all > 0:
                             total = raw_tot_all
                             pos = raw_pos
                             neg = raw_neg
-                        elif n_steam > 0:
-                            total = n_steam
-                            ratio = (raw_pos / raw_tot_all) if raw_tot_all > 0 else 0.9
-                            pos = int(round(total * ratio))
-                            neg = total - pos
-                        else:
-                            summary_disp = props.get("summary_options", {}).get("summaryDisplayed") or props.get("summary_options", {}).get("summaryGlobalNoOutliers") or {}
-                            total = summary_disp.get("nReviews", 0)
-                            pos = summary_disp.get("nReviewsPositive", 0)
-                            neg = max(0, total - pos)
-
-                        summary_disp = props.get("summary_options", {}).get("summaryDisplayed") or props.get("summary_options", {}).get("summaryGlobalNoOutliers") or {}
-                        score_id = summary_disp.get("eReviewScore", 0)
-                        desc = SCORE_MAP.get(score_id, "Unrated")
-
-                        if total > 0:
+                            score_id = summary_disp.get("eReviewScore", 0)
+                            desc = SCORE_MAP.get(score_id, "Unrated")
                             fetched_ok = True
+
+                        has_purchase = "btn_add_to_cart" in res_store.text
+                        is_free_tag = 'Free to Play' in res_store.text or 'Kostenlos zu spielen' in res_store.text or 'free_btn' in res_store.text
+                        if is_free_tag and not has_purchase:
+                            is_free_val = 1
+                        elif has_purchase:
+                            is_free_val = 0
         except Exception:
             pass
 
         async def fetch_query(purchase_type: str) -> Optional[Dict[str, Any]]:
-            url = f"https://store.steampowered.com/appreviews/{appid}?json=1&num_per_page=0&language=all&purchase_type={purchase_type}&filter_offtopic_activity=0"
+            url = f"https://store.steampowered.com/appreviews/{appid}?json=1&num_per_page=0&language=all&purchase_type={purchase_type}&filter_offtopic_activity=1"
             for attempt in range(3):
                 try:
                     res = await client.get(url, timeout=10.0)
@@ -286,110 +294,33 @@ class RatingFetcher:
                     await asyncio.sleep(0.8)
             return None
 
-        # 2. If store page did not resolve review numbers, fallback to official appreviews API
+        # 2. Fallback to official appreviews API (purchase_type=steam matches official store page)
         if not fetched_ok:
-            # If delisted game: Steam Store defaults to purchase_type=all
-            if is_delisted_val == 1:
-                summary = await fetch_query("all")
-                if summary:
-                    pos = summary.get("total_positive", 0)
-                    neg = summary.get("total_negative", 0)
-                    total = summary.get("total_reviews", 0)
-                    desc = summary.get("review_score_desc", "Unrated")
+            summary_steam = await fetch_query("steam")
+            tot_steam = summary_steam.get("total_reviews", 0) if summary_steam else 0
+
+            if tot_steam > 0:
+                pos = summary_steam.get("total_positive", 0)
+                neg = summary_steam.get("total_negative", 0)
+                total = summary_steam.get("total_reviews", 0)
+                desc = summary_steam.get("review_score_desc", "Unrated")
                 fetched_ok = True
-            # If already known whether the game is Free-to-Play or Paid:
-            elif is_free_val == 1:
-                # Free-to-Play game: Steam Store defaults to purchase_type=all
-                summary = await fetch_query("all")
-                if summary:
-                    pos = summary.get("total_positive", 0)
-                    neg = summary.get("total_negative", 0)
-                    total = summary.get("total_reviews", 0)
-                    desc = summary.get("review_score_desc", "Unrated")
+            else:
+                # 0 Steam purchases (delisted, key-only, or non-purchase): query purchase_type=all
+                summary_all = await fetch_query("all")
+                if summary_all and summary_all.get("total_reviews", 0) > 0:
+                    pos = summary_all.get("total_positive", 0)
+                    neg = summary_all.get("total_negative", 0)
+                    total = summary_all.get("total_reviews", 0)
+                    desc = summary_all.get("review_score_desc", "Unrated")
                     fetched_ok = True
-            elif is_free_val == 0:
-                # Paid game: check steam purchases first, then all if 0
-                summary_steam = await fetch_query("steam")
-                tot_steam = summary_steam.get("total_reviews", 0) if summary_steam else 0
-                if tot_steam == 0:
-                    summary_all = await fetch_query("all")
-                    if summary_all and summary_all.get("total_reviews", 0) > 0:
-                        pos = summary_all.get("total_positive", 0)
-                        neg = summary_all.get("total_negative", 0)
-                        total = summary_all.get("total_reviews", 0)
-                        desc = summary_all.get("review_score_desc", "Unrated")
-                        is_free_val = 1
-                        fetched_ok = True
-                    elif summary_steam:
-                        pos = 0
-                        neg = 0
-                        total = 0
-                        desc = summary_steam.get("review_score_desc", "Unrated")
-                        fetched_ok = True
-                else:
+                elif summary_steam:
                     pos = summary_steam.get("total_positive", 0)
                     neg = summary_steam.get("total_negative", 0)
-                    total = summary_steam.get("total_reviews", 0)
+                    total = 0
                     desc = summary_steam.get("review_score_desc", "Unrated")
                     fetched_ok = True
-            else:
-                # Unknown is_free: Query purchase_type=steam first
-                summary_steam = await fetch_query("steam")
-                tot_steam = summary_steam.get("total_reviews", 0) if summary_steam else 0
 
-                if tot_steam == 0:
-                    # 0 Steam checkout purchases -> check purchase_type=all
-                    summary_all = await fetch_query("all")
-                    if summary_all and summary_all.get("total_reviews", 0) > 0:
-                        pos = summary_all.get("total_positive", 0)
-                        neg = summary_all.get("total_negative", 0)
-                        total = summary_all.get("total_reviews", 0)
-                        desc = summary_all.get("review_score_desc", "Unrated")
-                        is_free_val = 1
-                        fetched_ok = True
-                    elif summary_steam:
-                        pos = summary_steam.get("total_positive", 0)
-                        neg = summary_steam.get("total_negative", 0)
-                        total = 0
-                        desc = summary_steam.get("review_score_desc", "Unrated")
-                        is_free_val = 0
-                        fetched_ok = True
-                else:
-                    # tot_steam > 0: Check purchase_type=all to see if it's Free-to-Play or transitioned
-                    summary_all = await fetch_query("all")
-                    tot_all = summary_all.get("total_reviews", 0) if summary_all else tot_steam
-
-                    # Determine if Free-to-Play:
-                    if (tot_all >= 10 * tot_steam and tot_all >= 500) or (tot_all - tot_steam > 500000):
-                        is_free_val = 1
-                    elif tot_all < 1.4 * tot_steam:
-                        is_free_val = 0
-                    else:
-                        try:
-                            det_url = f"https://store.steampowered.com/api/appdetails?appids={appid}&filters=basic"
-                            res_det = await client.get(det_url, timeout=5.0)
-                            if res_det.status_code == 200:
-                                data_det = res_det.json()
-                                if data_det and str(appid) in data_det and data_det[str(appid)].get("success"):
-                                    is_free_bool = data_det[str(appid)].get("data", {}).get("is_free", False)
-                                    is_free_val = 1 if is_free_bool else 0
-                        except Exception:
-                            pass
-                        if is_free_val is None:
-                            is_free_val = 0
-
-                    if is_free_val == 1 and summary_all:
-                        pos = summary_all.get("total_positive", 0)
-                        neg = summary_all.get("total_negative", 0)
-                        total = summary_all.get("total_reviews", 0)
-                        desc = summary_all.get("review_score_desc", "Unrated")
-                        fetched_ok = True
-                    elif summary_steam:
-                        pos = summary_steam.get("total_positive", 0)
-                        neg = summary_steam.get("total_negative", 0)
-                        total = summary_steam.get("total_reviews", 0)
-                        desc = summary_steam.get("review_score_desc", "Unrated")
-                        fetched_ok = True
 
         name = store_name or get_cached_name(appid) or f"App {appid}"
 

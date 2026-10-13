@@ -242,7 +242,7 @@ h1 {
 /* Layout */
 .main-layout {
   display: grid;
-  grid-template-columns: 330px 1fr;
+  grid-template-columns: 340px 1fr;
   gap: 18px;
   align-items: stretch;
   flex: 1;
@@ -380,37 +380,205 @@ h1 {
   transform: rotate(45deg);
 }
 
-/* 3-Button Level Selector */
-.level-btn-group {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+/* Label with Level Badge */
+.label-with-badge {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-.level-btn {
+.level-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--steam-blue);
+  background: rgba(102, 192, 244, 0.12);
+  border: 1px solid rgba(102, 192, 244, 0.35);
+  padding: 2px 7px;
+  border-radius: 12px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+/* 10-Level Stepped Slider Control */
+.slider-control-wrapper {
   background: var(--bg-input);
   border: 1px solid var(--border-color);
-  color: var(--text-muted);
-  padding: 8px 6px;
   border-radius: var(--radius-md);
-  font-size: 12.5px;
-  font-weight: 600;
+  padding: 10px 11px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stepped-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #192736;
+  outline: none;
   cursor: pointer;
-  transition: all 0.2s ease;
+  margin: 6px 0 2px;
+}
+
+.stepped-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #192736;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stepped-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #66c0f4;
+  cursor: pointer;
+  margin-top: -6px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 8px rgba(102, 192, 244, 0.6);
+  transition: transform 0.1s ease, background-color 0.1s ease, box-shadow 0.1s ease;
+}
+
+.stepped-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 12px rgba(102, 192, 244, 0.9);
+}
+
+.stepped-slider::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+  background: #4196ce;
+}
+
+.stepped-slider::-moz-range-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #192736;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stepped-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #66c0f4;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 8px rgba(102, 192, 244, 0.6);
+  transition: transform 0.1s ease;
+}
+
+.slider-ticks {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px;
+  user-select: none;
+}
+
+.slider-ticks span {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.slider-ticks span.center-tick {
+  color: #a4c0db;
+}
+
+/* Unified Threshold Card & Rows */
+.threshold-card {
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.threshold-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 27px;
+  padding: 0 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.threshold-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.threshold-row-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.threshold-row-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.threshold-row-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: #c5d4e4;
+  white-space: nowrap;
+}
+
+.threshold-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.40);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.threshold-pill-num {
+  color: #ffffff;
+  font-weight: 700;
+  font-feature-settings: "tnum";
+}
+
+.threshold-pill-unit {
+  color: #8da2b6;
+  font-weight: 500;
+}
+
+.threshold-empty-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 5px 6px;
   text-align: center;
 }
 
-.level-btn:hover {
-  background: var(--bg-hover);
-  color: #fff;
-}
-
-.level-btn.active {
-  background: #25394d;
-  color: #fff;
-  border-color: var(--steam-blue);
-  box-shadow: 0 0 10px rgba(102, 192, 244, 0.2);
-}
 
 /* Tier Color Dot */
 .tier-color-dot {

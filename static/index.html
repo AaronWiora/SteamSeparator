@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SteamSeparator</title>
-  <link rel="stylesheet" href="/static/styles.css?v=3.7">
+  <link rel="stylesheet" href="/static/styles.css?v=4.4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -64,10 +64,13 @@
             <h2 id="i18n-tuning-title">Feinjustierung</h2>
           </div>
 
-          <!-- 3-Button Level Selector -->
+          <!-- 10-Level Stepped Slider -->
           <div class="setting-group">
             <div class="setting-label-row">
-              <label class="setting-label" id="i18n-confidence-label">Review-Filter</label>
+              <div class="label-with-badge">
+                <label class="setting-label" id="i18n-confidence-label">Review-Filter</label>
+                <span class="level-badge" id="filter-level-badge">Level 5 · Ausgewogen</span>
+              </div>
               <div class="popover-wrapper">
                 <button type="button" class="info-tooltip-icon" id="btn-confidence-info" aria-label="Info zum Review-Filter">ⓘ</button>
                 <div class="popover-box" id="confidence-popover" role="tooltip">
@@ -78,10 +81,23 @@
                 </div>
               </div>
             </div>
-            <div class="level-btn-group">
-              <button class="level-btn" data-c="150" id="btn-level-low">Niedrig</button>
-              <button class="level-btn active" data-c="350" id="btn-level-med">Mittel</button>
-              <button class="level-btn" data-c="700" id="btn-level-high">Hoch</button>
+            <div class="slider-control-wrapper">
+              <input type="range" min="1" max="10" value="5" step="1" class="stepped-slider" id="filter-level-slider" aria-label="Review filter level">
+              <div class="slider-ticks" aria-hidden="true">
+                <span>1</span>
+                <span>2</span>
+                <span>3</span>
+                <span>4</span>
+                <span class="center-tick">5</span>
+                <span>6</span>
+                <span>7</span>
+                <span>8</span>
+                <span>9</span>
+                <span>10</span>
+              </div>
+              <div class="threshold-card" id="threshold-card">
+                <!-- Dynamically populated threshold rows for selected categories -->
+              </div>
             </div>
           </div>
 
@@ -145,14 +161,13 @@
               <tr>
                 <th style="width: 125px;" id="th-cover">Cover</th>
                 <th id="th-game">Spiel</th>
-                <th style="text-align: right;" id="th-raw" title="Gewichtet die Review-Anzahl: Verhindert Top-Einstufungen bei geringer Stimmenanzahl.">Positiv %</th>
-                <th style="text-align: right;" id="th-score" title="Gewichtet die Review-Anzahl: Verhindert Top-Einstufungen bei geringer Stimmenanzahl.">Gewichteter Score</th>
-                <th id="th-status">Steam-Collection</th>
+                <th style="text-align: right; width: 180px;" id="th-raw" title="Prozentsatz positiver Bewertungen (Positive / Gesamt)">Positiv %</th>
+                <th style="width: 210px;" id="th-status">Steam-Collection</th>
               </tr>
             </thead>
             <tbody id="games-table-body">
               <tr>
-                <td colspan="5" class="table-loading">Lade Bibliothek...</td>
+                <td colspan="4" class="table-loading">Lade Bibliothek...</td>
               </tr>
             </tbody>
           </table>
@@ -164,6 +179,6 @@
   <!-- Notification Toast -->
   <div id="toast" class="toast hidden"></div>
 
-  <script src="/static/app.js?v=3.7"></script>
+  <script src="/static/app.js?v=4.4"></script>
 </body>
 </html>
